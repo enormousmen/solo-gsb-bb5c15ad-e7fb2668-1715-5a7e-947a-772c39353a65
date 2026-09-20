@@ -390,6 +390,45 @@ tr.locked-row.conflict-row {
   white-space: pre-wrap;
 }
 
+.line-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.line-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.line-text {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.width-chip {
+  flex: none;
+  padding: 0.05rem 0.45rem;
+  border-radius: 99px;
+  background: #eef2f8;
+  color: #41506a;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.width-chip.over {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+tr.failed-row {
+  background: #fff5f5;
+}
+
 footer {
   text-align: center;
   color: var(--muted);

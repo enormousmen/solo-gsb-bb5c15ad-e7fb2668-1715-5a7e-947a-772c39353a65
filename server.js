@@ -17,6 +17,11 @@ const {
   serializeVolume,
   buildManifest,
 } = require('./src/split');
+const {
+  LIMITS: WRAP_LIMITS,
+  DEFAULTS: WRAP_DEFAULTS,
+  wrapCues,
+} = require('./src/wrap');
 const { createZip } = require('./src/zip');
 
 const app = express();
@@ -265,6 +270,58 @@ app.post('/api/split', upload.single('subtitle'), (req, res) =>
 app.post('/api/split/download', upload.single('subtitle'), (req, res) =>
   handleSplitRequest(req, res, { download: true })
 );
+
+/**
+ * 字幕智能换行：按每行最大显示宽度与最多行数重新分行。
+ * 成功时返回每条字幕换行前后各行文本与行宽，以及完整的新 SRT（前端下载）；
+ * 有字幕无法在行数内消除超限时返回 422 与失败清单，拒绝导出。
+ */
+app.post('/api/wrap', upload.single('subtitle'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '请先上传 .srt 字幕文件。' });
+    }
+
+    const maxWidth = parseNumberField(req.body.maxWidth, '每行最大显示宽度', {
+      min: WRAP_LIMITS.minWidth,
+      max: WRAP_LIMITS.maxWidth,
+      integer: true,
+      fallback: WRAP_DEFAULTS.maxWidth,
+    });
+    const maxLines = parseNumberField(req.body.maxLines, '最多行数', {
+      min: WRAP_LIMITS.minLines,
+      max: WRAP_LIMITS.maxLines,
+      integer: true,
+      fallback: WRAP_DEFAULTS.maxLines,
+    });
+
+    const content = req.file.buffer.toString('utf8');
+    const cues = parseSrt(content);
+    const result = wrapCues(cues, { maxWidth, maxLines });
+
+    const options = { maxWidth, maxLines };
+    if (!result.feasible) {
+      return res.status(422).json({
+        feasible: false,
+        error: `有 ${result.failedCues.length} 条字幕无法在 ${maxLines} 行内消除超限，已拒绝导出。`,
+        options,
+        results: result.results,
+        failedCues: result.failedCues,
+        stats: result.stats,
+      });
+    }
+
+    return res.json({
+      feasible: true,
+      options,
+      results: result.results,
+      stats: result.stats,
+      wrappedSrt: serializeSrt(result.wrappedCues),
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+});
 
 if (require.main === module) {
   app.listen(PORT, () => {
