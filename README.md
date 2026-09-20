@@ -1,11 +1,12 @@
 # SRT 字幕时轴修复工具
 
-一个基于 **Node.js + Express + 原生 HTML/CSS/JavaScript** 的 Web 应用，包含两个模块：
+一个基于 **Node.js + Express + 原生 HTML/CSS/JavaScript** 的 Web 应用，包含三个模块：
 
 1. **时轴修复**：修复 SRT 字幕的显示时间，保护用户指定的场景切点不被字幕跨越，并支持把关键字幕锁定为不可移动的时间锚点。
 2. **字幕分卷导出**：把整部字幕按“每卷时长 / 字符数”两项上限切分成多卷，用全局动态规划选择分卷边界，打包 ZIP 下载（卷内时间回零，附 manifest.json）。
+3. **字幕智能换行**：按“每行最大显示宽度 / 最多行数”为每条字幕选择最优断点，预览逐行宽度，导出保留编号、时轴与样式标记的新 SRT。
 
-页面顶部导航可在两个模块之间切换。
+页面顶部导航可在三个模块之间切换。
 
 ## 功能
 
@@ -49,6 +50,25 @@
 - 单条字幕自身超限（时长或字符数超过每卷上限）时，列出编号与原因并**拒绝导出**。
 - 结果页预览每卷的原始时间范围、字幕数与字符数。
 - 下载 ZIP：每卷一个独立 SRT，**卷内时间统一回零**（从 `00:00:00,000` 开始）；附 `manifest.json` 记录每个卷文件名与原始时间范围。
+
+### 字幕智能换行（`/wrap.html`）
+
+- 复用同一套 SRT 解析；上传后设置**每行最大显示宽度**与**最多行数**。
+- 宽度按**字素簇**计算（`Intl.Segmenter`，无则退化为码点）：
+  - 中文及全角字符计 **2**；
+  - 其他可见字符计 **1**；
+  - HTML 标签（如 `<i>`、`<font ...>`）与 ASS 覆盖块（如 `{\an8}`）计 **0**，且作为原子整体**不得从内部断开**；
+  - 组合符、ZWJ、变体选择符计 0（如 `é` 仍计 1，ZWJ 连接的表情序列计 2）。
+- 断点只能落在**空白或标点之后**的合法位置；软断行会吞掉断点两侧相邻的空白。
+- 每条字幕用**动态规划**依次最少化（字典序目标）：
+  1. 超限宽度（各行超出上限的宽度之和）；
+  2. 行宽极差（最宽行与最窄行之差）；
+  3. 断点数；
+  4. 同分取更早的断点序列。
+- 原有换行作为硬断行保留，并计入最多行数。
+- 页面预览**换行前后对照与逐行宽度**，超限行红色标注。
+- 任一字幕在行数上限内无法消除超限时**标出该字幕并拒绝导出**（含原始行数已超过行数上限的情况）。
+- 成功时下载新 SRT：**保留编号、时轴与样式标记**，仅按方案插入换行。
 
 ## 使用 Docker Compose 启动
 
@@ -127,6 +147,15 @@ ports:
 - 空白字符。
 
 中日韩文字和拉丁字符均按一个可见字符计算。
+
+### 字幕智能换行
+
+| 参数 | 默认值 | 说明 |
+|---|---:|---|
+| 每行最大显示宽度 | `40` | 2～200 的整数；中文及全角字符计 2，其他可见字符计 1，标签与 ASS 覆盖计 0 |
+| 最多行数 | `2` | 1～10 的整数；含原有硬换行 |
+
+页面地址：<http://localhost:3000/wrap.html>
 
 ## 调整算法说明
 
@@ -225,6 +254,19 @@ manifest.json            # 清单
 
 ZIP 由内置的极简写入器生成（STORE 存储模式，UTF-8 文件名），不引入外部依赖。
 
+## 换行算法说明
+
+每条字幕的文本先切为 token 流：HTML 标签与 ASS 覆盖块是宽度为 0 的原子 token（不得从内部断开），其余按字素簇切分并计宽（中文及全角 2、其他可见字符 1、组合符 0）。原文中的换行是**硬断行**（必须保留并计入行数）；软断点只能落在空白或标点 token 之后。
+
+求解使用逐位置的动态规划：`dp[j]` 表示前 j 个 token（以行边界结尾）的帕累托前沿，行 `[i, j)` 不得跨越硬断行，行首/行尾空白不计入宽度。每个部分解记录 `(超限宽度, 最窄行宽, 最宽行宽, 行数, 断点序列)`，按“区间包含 + 不更差”的规则剪枝；最终在行数上限内按以下字典序目标选优：
+
+1. **超限宽度**最小：各行 `max(0, 行宽 − 上限)` 之和；
+2. **行宽极差**最小：最宽行 − 最窄行；
+3. **断点数**最少；
+4. 同分取**更早的断点序列**（断点位置字典序最小）。
+
+软断行会吞掉断点两侧相邻的空白（不输出、不占宽度）；标签与 ASS 覆盖块始终完整保留在输出中。若在行数上限内最小超限宽度仍大于 0（含原始硬行数已超过上限的情况），该字幕被标出，接口返回 422 并拒绝导出；全部达标时导出的 SRT 保留原编号、时轴与样式标记（带 BOM）。
+
 ## 本地开发（不使用 Docker）
 
 要求 Node.js 18 或更高版本。
@@ -314,6 +356,40 @@ curl -F "subtitle=@movie.srt" \
      http://localhost:3000/api/split/download
 ```
 
+### `POST /api/wrap`
+
+换行预览。`multipart/form-data`：
+
+- `subtitle`：SRT 文件；
+- `maxWidth`：每行最大显示宽度（2～200 的整数，缺省 40）；
+- `maxLines`：最多行数（1～10 的整数，缺省 2）。
+
+返回：
+
+- `200`：`cues` 数组，每条含 `originalText`、`wrappedText`、逐行 `lines`（`text` 与显示宽度 `width`）、`lineCount`、`overflow`、`changed` 与 `feasible`；顶层附 `stats`（`total`/`changed`/`failed`）；
+- `422`：存在行数上限内无法消除超限的字幕，`failedIndices` 标出编号，`cues` 仍给出最小超限的预览，拒绝导出；
+- `400`：文件缺失、SRT 格式错误或参数越界。
+
+### `POST /api/wrap/download`
+
+参数与 `/api/wrap` 相同。返回：
+
+- `200`：`text/plain` 附件（`<基础名>.wrapped.srt`，带 BOM），保留原编号、时轴与样式标记，仅按换行方案插入换行；
+- `422` / `400`：与预览接口一致（JSON 错误）。
+
+```bash
+curl -F "subtitle=@movie.srt" \
+     -F "maxWidth=40" \
+     -F "maxLines=2" \
+     http://localhost:3000/api/wrap
+
+curl -F "subtitle=@movie.srt" \
+     -F "maxWidth=40" \
+     -F "maxLines=2" \
+     -o movie.wrapped.srt \
+     http://localhost:3000/api/wrap/download
+```
+
 ## 项目结构
 
 ```text
@@ -321,24 +397,29 @@ curl -F "subtitle=@movie.srt" \
 ├── Dockerfile
 ├── compose.yaml
 ├── package.json
-├── server.js              # Express 路由与参数校验（/api/fix、/api/split、/api/split/download）
+├── server.js              # Express 路由与参数校验（/api/fix、/api/split、/api/wrap 及各自 download）
 ├── src
 │   ├── fixer.js           # 约束联动求解与最短冲突段诊断
 │   ├── split.js           # 分卷全局动态规划、超限检查、manifest 生成
+│   ├── wrap.js            # 字素簇宽度计算与换行动态规划
 │   ├── zip.js             # 极简 ZIP 写入器（STORE 模式，无外部依赖）
 │   ├── srt.js             # SRT 解析、字符统计、序列化
 │   └── time.js            # 时间码解析与格式化
 ├── public
 │   ├── index.html         # 时轴修复页面
 │   ├── split.html         # 字幕分卷导出页面
+│   ├── wrap.html          # 字幕智能换行页面
 │   ├── styles.css
 │   ├── app.js             # 时轴修复前端逻辑
-│   └── split.js           # 分卷导出前端逻辑
+│   ├── split.js           # 分卷导出前端逻辑
+│   └── wrap.js            # 智能换行前端逻辑
 └── test
     ├── fixer.test.js      # 求解器与锁定锚点测试
     ├── split.test.js      # 分卷 DP 测试（含与暴力枚举对照的随机化验证）
+    ├── wrap.test.js       # 换行 DP 测试（含与暴力枚举对照的随机化验证）
     ├── zip.test.js        # ZIP 写入器测试
     ├── api.test.js        # /api/fix 接口测试
     ├── split-api.test.js  # /api/split 与 /api/split/download 接口测试
+    ├── wrap-api.test.js   # /api/wrap 与 /api/wrap/download 接口测试
     └── helpers.js         # 测试辅助（ZIP 解析）
 ```

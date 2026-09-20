@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>字幕智能换行 - SRT 工具</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <nav class="top-nav" aria-label="模块切换">
+        <a href="/" class="nav-link">时轴修复</a>
+        <a href="/split.html" class="nav-link">字幕分卷导出</a>
+        <a href="/wrap.html" class="nav-link active" aria-current="page">字幕智能换行</a>
+      </nav>
+      <p class="eyebrow">SRT Smart Wrapping</p>
+      <h1>字幕智能换行</h1>
+      <p class="subtitle">
+        上传 SRT，设置每行最大显示宽度与最多行数；系统按字素簇计算宽度
+        （中文及全角字符计 2、其他可见字符计 1、标签与 ASS 覆盖计 0），
+        用动态规划在空白与标点后的合法位置选择断点，依次最少化超限宽度、
+        行宽极差与断点数。无法在行数内消除超限的字幕会被标出并拒绝导出。
+      </p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel controls" aria-labelledby="wrap-form-title">
+      <h2 id="wrap-form-title">换行参数</h2>
+      <form id="wrap-form">
+        <label class="field file-field">
+          <span>字幕文件（.srt，UTF-8）</span>
+          <input id="subtitle" name="subtitle" type="file" accept=".srt,text/plain" required>
+        </label>
+
+        <div class="grid-2">
+          <label class="field">
+            <span>每行最大显示宽度</span>
+            <input name="maxWidth" type="number" min="2" max="200" step="1" value="40" required>
+          </label>
+          <label class="field">
+            <span>最多行数</span>
+            <input name="maxLines" type="number" min="1" max="10" step="1" value="2" required>
+          </label>
+        </div>
+
+        <button id="wrap-submit" type="submit">分析换行方案</button>
+        <p id="wrap-message" class="message" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <section class="panel guide">
+      <h2>换行规则</h2>
+      <ul>
+        <li>宽度按字素簇计算：中文及全角字符计 2，其他可见字符计 1。</li>
+        <li>HTML 标签（如 <code>&lt;i&gt;</code>）与 ASS 覆盖块（如 <code>{\an8}</code>）计 0 宽，且作为整体不得从内部断开。</li>
+        <li>断点只能落在空白或标点之后；软断行会吞掉断点两侧相邻的空白。</li>
+        <li>每条字幕用动态规划依次最少化：超限宽度、行宽极差、断点数；同分取更早断点。</li>
+        <li>原有换行作为硬断行保留，并计入最多行数。</li>
+        <li>无法在行数内消除超限的字幕会被标出，并拒绝导出。</li>
+        <li>导出 SRT 保留原有编号、时轴与样式标记。</li>
+      </ul>
+    </section>
+  </main>
+
+  <section id="wrap-result" class="result-section" hidden>
+    <div class="result-toolbar">
+      <div>
+        <h2 id="wrap-result-title">换行方案</h2>
+        <p id="wrap-summary" class="summary"></p>
+      </div>
+      <button id="wrap-download" class="secondary" type="button" hidden>下载换行后的 SRT</button>
+    </div>
+    <div id="failed-box" class="conflict-box" hidden></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>时间</th>
+            <th class="text-col">换行前</th>
+            <th class="text-col">换行后（逐行宽度）</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody id="wrap-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Node.js · Express · 原生 JavaScript
+  </footer>
+
+  <script src="/wrap.js"></script>
+</body>
+</html>

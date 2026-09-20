@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 
-const { parseSrt, serializeSrt } = require('./src/srt');
+const { parseSrt, serializeSrt, serializeSrtWithBom } = require('./src/srt');
 const { parseFlexibleTime } = require('./src/time');
 const { DEFAULTS, fixSubtitles } = require('./src/fixer');
 const {
@@ -17,6 +17,11 @@ const {
   serializeVolume,
   buildManifest,
 } = require('./src/split');
+const {
+  LIMITS: WRAP_LIMITS,
+  DEFAULTS: WRAP_DEFAULTS,
+  wrapCues,
+} = require('./src/wrap');
 const { createZip } = require('./src/zip');
 
 const app = express();
@@ -264,6 +269,80 @@ app.post('/api/split', upload.single('subtitle'), (req, res) =>
 
 app.post('/api/split/download', upload.single('subtitle'), (req, res) =>
   handleSplitRequest(req, res, { download: true })
+);
+
+/**
+ * 字幕智能换行：预览（JSON）与下载（SRT）共用同一套校验与求解。
+ * download=false 返回每条字幕换行前后的文本与逐行宽度；
+ * download=true 返回保留编号、时轴与样式标记的新 SRT。
+ * 任一字幕在行数上限内无法消除超限时返回 422 并拒绝导出。
+ */
+function handleWrapRequest(req, res, { download }) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '请先上传 .srt 字幕文件。' });
+    }
+
+    const maxWidth = parseNumberField(req.body.maxWidth, '每行最大显示宽度', {
+      min: WRAP_LIMITS.minWidth,
+      max: WRAP_LIMITS.maxWidth,
+      integer: true,
+      fallback: WRAP_DEFAULTS.maxWidth,
+    });
+    const maxLines = parseNumberField(req.body.maxLines, '最多行数', {
+      min: WRAP_LIMITS.minLines,
+      max: WRAP_LIMITS.maxLines,
+      integer: true,
+      fallback: WRAP_DEFAULTS.maxLines,
+    });
+
+    const content = req.file.buffer.toString('utf8');
+    const cues = parseSrt(content);
+    const result = wrapCues(cues, { maxWidth, maxLines });
+    const options = { maxWidth, maxLines };
+
+    if (!result.feasible) {
+      return res.status(422).json({
+        feasible: false,
+        error: `有 ${result.stats.failed} 条字幕在 ${maxLines} 行内无法消除超限，已拒绝导出。`,
+        options,
+        cues: result.cues,
+        failedIndices: result.failedIndices,
+        stats: result.stats,
+      });
+    }
+
+    if (download) {
+      const wrappedCues = cues.map((cue, i) => ({
+        ...cue,
+        text: result.cues[i].wrappedText,
+      }));
+      const baseName = sanitizeBaseName(originalFileName(req.file));
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="wrapped.srt"; filename*=UTF-8''${encodeURIComponent(`${baseName}.wrapped.srt`)}`
+      );
+      return res.send(Buffer.from(serializeSrtWithBom(wrappedCues), 'utf8'));
+    }
+
+    return res.json({
+      feasible: true,
+      options,
+      cues: result.cues,
+      stats: result.stats,
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+}
+
+app.post('/api/wrap', upload.single('subtitle'), (req, res) =>
+  handleWrapRequest(req, res, { download: false })
+);
+
+app.post('/api/wrap/download', upload.single('subtitle'), (req, res) =>
+  handleWrapRequest(req, res, { download: true })
 );
 
 if (require.main === module) {

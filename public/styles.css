@@ -390,6 +390,37 @@ tr.locked-row.conflict-row {
   white-space: pre-wrap;
 }
 
+.wrap-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.wrap-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wrap-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.line-width {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.line-width.over {
+  color: var(--danger-text);
+  font-weight: 700;
+}
+
 footer {
   text-align: center;
   color: var(--muted);

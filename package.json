@@ -1,7 +1,7 @@
 {
   "name": "srt-time-fixer",
   "version": "1.0.0",
-  "description": "修复 SRT 字幕时轴（最短时长/CPS/最小间隔联动，避开场景切点），并按每卷时长与字符上限全局最优分卷导出 ZIP。",
+  "description": "修复 SRT 字幕时轴（最短时长/CPS/最小间隔联动，避开场景切点），按每卷时长与字符上限全局最优分卷导出 ZIP，并按行宽与行数上限智能换行。",
   "main": "server.js",
   "engines": {
     "node": ">=18"
