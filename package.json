@@ -1,0 +1,17 @@
+{
+  "name": "srt-time-fixer",
+  "version": "1.0.0",
+  "description": "修复 SRT 字幕时轴（最短时长/CPS/最小间隔联动，避开场景切点），并按每卷时长与字符上限全局最优分卷导出 ZIP。",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.4.0"
+  }
+}

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SRT 字幕时轴修复工具</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <nav class="top-nav" aria-label="模块切换">
+        <a href="/" class="nav-link active" aria-current="page">时轴修复</a>
+        <a href="/split.html" class="nav-link">字幕分卷导出</a>
+      </nav>
+      <p class="eyebrow">SRT Timing Repair</p>
+      <h1>字幕时轴修复与场景切点保护</h1>
+      <p class="subtitle">
+        上传 SRT，声明不可跨越的场景切点，并可把关键字幕锁定为时间锚点；系统会同时满足最短显示时长、
+        最大每秒字符数与相邻最小间隔，并在无解时定位包含相关锚点的最短冲突字幕段。
+      </p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel controls" aria-labelledby="form-title">
+      <h2 id="form-title">修复参数</h2>
+      <form id="fix-form">
+        <label class="field file-field">
+          <span>字幕文件（.srt，UTF-8）</span>
+          <input id="subtitle" name="subtitle" type="file" accept=".srt,text/plain" required>
+        </label>
+
+        <div class="grid-3">
+          <label class="field">
+            <span>最短显示时长（秒）</span>
+            <input name="minDurationSeconds" type="number" min="0.05" max="60" step="0.05" value="0.5" required>
+          </label>
+          <label class="field">
+            <span>最大 CPS（字符/秒）</span>
+            <input name="maxCps" type="number" min="1" max="100" step="0.5" value="15" required>
+          </label>
+          <label class="field">
+            <span>最小间隔（毫秒）</span>
+            <input name="minGapMs" type="number" min="0" max="10000" step="10" value="80" required>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>不可跨越的场景切点</span>
+          <textarea name="cuts" rows="6"
+            placeholder="每行一个，也可用逗号或分号分隔，例如：&#10;12.5&#10;01:30.500&#10;00:02:15,000"></textarea>
+          <small>切点之间的字幕只能在原区间内联动调整；字幕时间不得覆盖任何切点。</small>
+        </label>
+
+        <label class="field">
+          <span>锁定的字幕编号（可选）</span>
+          <input name="locks" type="text" placeholder="例如：3, 7, 12" autocomplete="off">
+          <small>编号按字幕在文件中的顺序从 1 开始（即结果表中的 # 列），可用逗号、空格或换行分隔；
+            锁定字幕严格保留原始起止时间，并作为双向时间锚点参与整体求解。</small>
+        </label>
+
+        <button id="submit-button" type="submit">分析并修复时轴</button>
+        <p id="form-message" class="message" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <section class="panel guide">
+      <h2>调整规则</h2>
+      <ul>
+        <li>每条字幕的显示时长不得短于设定值，也不得短于 <code>字符数 ÷ 最大 CPS</code>。</li>
+        <li>相邻字幕结束与下一条开始之间保留最小间隔。</li>
+        <li>调整后严格保持原有字幕顺序。</li>
+        <li>任何字幕都不能覆盖场景切点；跨越切点的字幕按其中点归属到原始侧。</li>
+        <li>锁定字幕严格保留原始起止时间，不延长、不移动，并作为双向锚点参与约束传播。</li>
+        <li>有解时在全部可行解中采用最小二乘意义上尽量少偏离原开始时间的联动方案。</li>
+        <li>无解时返回包含相关锚点的最短冲突段，并说明需求时长、可用时长与冲突的锁定字幕。</li>
+      </ul>
+    </section>
+  </main>
+
+  <section id="result-section" class="result-section" hidden>
+    <div class="result-toolbar">
+      <div>
+        <h2 id="result-title">修复结果</h2>
+        <p id="result-summary" class="summary"></p>
+      </div>
+      <button id="download-button" class="secondary" type="button" hidden>下载修复后的 SRT</button>
+    </div>
+    <div id="conflict-box" class="conflict-box" hidden></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>修复前时间</th>
+            <th>修复后时间</th>
+            <th class="text-col">文本</th>
+            <th>字符</th>
+            <th>变化</th>
+          </tr>
+        </thead>
+        <tbody id="result-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Node.js · Express · 原生 JavaScript
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

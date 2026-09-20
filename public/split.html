@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>字幕分卷导出 - SRT 工具</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <nav class="top-nav" aria-label="模块切换">
+        <a href="/" class="nav-link">时轴修复</a>
+        <a href="/split.html" class="nav-link active" aria-current="page">字幕分卷导出</a>
+      </nav>
+      <p class="eyebrow">SRT Volume Export</p>
+      <h1>字幕分卷导出</h1>
+      <p class="subtitle">
+        上传 SRT，设置每卷时长与字符上限；系统用全局动态规划在相邻字幕之间选择分卷边界：
+        先最少化分卷数，再最大化边界处字幕间隔总和，同分取更早的边界序列。
+        每卷导出为独立 SRT，卷内时间统一回零，并附 manifest.json 记录原始范围。
+      </p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel controls" aria-labelledby="split-form-title">
+      <h2 id="split-form-title">分卷参数</h2>
+      <form id="split-form">
+        <label class="field file-field">
+          <span>字幕文件（.srt，UTF-8）</span>
+          <input id="subtitle" name="subtitle" type="file" accept=".srt,text/plain" required>
+        </label>
+
+        <div class="grid-2">
+          <label class="field">
+            <span>每卷最长（分钟）</span>
+            <input name="maxMinutes" type="number" min="1" max="30" step="0.5" value="25" required>
+          </label>
+          <label class="field">
+            <span>每卷最多字符（字）</span>
+            <input name="maxChars" type="number" min="100" max="20000" step="100" value="8000" required>
+          </label>
+        </div>
+
+        <button id="split-submit" type="submit">分析分卷方案</button>
+        <p id="split-message" class="message" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <section class="panel guide">
+      <h2>分卷规则</h2>
+      <ul>
+        <li>每卷时长（卷内首条开始至末条结束）不超过设定分钟数，可见字符总数不超过设定值。</li>
+        <li>分卷边界只能落在相邻字幕之间，绝不拆分单条字幕。</li>
+        <li>全局动态规划：依次最少化分卷数、最大化边界间隔总和，同分取更早的边界序列。</li>
+        <li>单条字幕自身超限时列出编号与原因，并拒绝导出。</li>
+        <li>导出 ZIP：每卷一个 SRT，卷内时间统一回零；manifest.json 记录文件名与原始范围。</li>
+      </ul>
+    </section>
+  </main>
+
+  <section id="split-result" class="result-section" hidden>
+    <div class="result-toolbar">
+      <div>
+        <h2 id="split-result-title">分卷方案</h2>
+        <p id="split-summary" class="summary"></p>
+      </div>
+      <button id="split-download" class="secondary" type="button" hidden>下载 ZIP</button>
+    </div>
+    <div id="oversized-box" class="conflict-box" hidden></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>卷</th>
+            <th>原始时间范围</th>
+            <th>字幕数</th>
+            <th>字符数</th>
+            <th>与下一卷间隔</th>
+          </tr>
+        </thead>
+        <tbody id="split-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Node.js · Express · 原生 JavaScript
+  </footer>
+
+  <script src="/split.js"></script>
+</body>
+</html>
